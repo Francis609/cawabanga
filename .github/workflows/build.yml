@@ -22,4 +22,4 @@ jobs:
       - name: Build
         run: dotnet build Api/CawaBanga.Api.csproj --configuration Release --no-restore
       - name: Test
-        run: dotnet test Api/CawaBanga.Api.csproj --configuration Release --no-build
+        run: dotnet test Api.Tests/Api.Tests.csproj --configuration Release
