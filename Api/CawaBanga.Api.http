@@ -1,0 +1,6 @@
+@CawaBanga.Api_HostAddress = http://localhost:5207
+
+GET {{CawaBanga.Api_HostAddress}}/health
+Accept: application/json
+
+###
