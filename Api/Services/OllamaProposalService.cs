@@ -40,42 +40,79 @@ public sealed class OllamaProposalService
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        using var responseJson = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync(cancellationToken),
-            cancellationToken: cancellationToken);
-        var generated = responseJson.RootElement.GetProperty("response").GetString();
+        JsonDocument responseJson;
+        try
+        {
+            responseJson = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(cancellationToken),
+                cancellationToken: cancellationToken);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("The local model returned malformed response JSON.", exception);
+        }
+
+        string? generated;
+        using (responseJson)
+        {
+            if (responseJson.RootElement.ValueKind != JsonValueKind.Object ||
+                !responseJson.RootElement.TryGetProperty("response", out var responseValue) ||
+                responseValue.ValueKind != JsonValueKind.String)
+            {
+                throw new InvalidDataException("The local model response did not contain a string proposal payload.");
+            }
+
+            generated = responseValue.GetString();
+        }
         if (string.IsNullOrWhiteSpace(generated))
         {
             throw new InvalidDataException("The local model returned an empty proposal.");
         }
 
-        using var proposalJson = JsonDocument.Parse(generated);
-        var root = proposalJson.RootElement;
-        var summary = root.TryGetProperty("summary", out var summaryValue)
-            ? summaryValue.GetString() ?? "Review proposed editing steps."
-            : "Review proposed editing steps.";
-        var steps = root.TryGetProperty("steps", out var stepsValue) && stepsValue.ValueKind == JsonValueKind.Array
-            ? stepsValue.EnumerateArray()
-                .Where(item => item.ValueKind == JsonValueKind.String)
-                .Select(item => item.GetString()!)
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Take(20)
-                .ToArray()
-            : [];
-
-        if (steps.Length == 0)
+        JsonDocument proposalJson;
+        try
         {
-            throw new InvalidDataException("The local model returned no usable editing steps.");
+            proposalJson = JsonDocument.Parse(generated);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("The local model returned malformed proposal JSON.", exception);
         }
 
-        return new EditProposal(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            request.Brief,
-            target,
-            projectPath,
-            summary,
-            steps,
-            ProposalDecision.Pending.ToString());
+        using (proposalJson)
+        {
+            var root = proposalJson.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException("The local model proposal must be a JSON object.");
+            }
+
+            var summary = root.TryGetProperty("summary", out var summaryValue) && summaryValue.ValueKind == JsonValueKind.String
+                ? summaryValue.GetString() ?? "Review proposed editing steps."
+                : "Review proposed editing steps.";
+            var steps = root.TryGetProperty("steps", out var stepsValue) && stepsValue.ValueKind == JsonValueKind.Array
+                ? stepsValue.EnumerateArray()
+                    .Where(item => item.ValueKind == JsonValueKind.String)
+                    .Select(item => item.GetString()!)
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Take(20)
+                    .ToArray()
+                : [];
+
+            if (steps.Length == 0)
+            {
+                throw new InvalidDataException("The local model returned no usable editing steps.");
+            }
+
+            return new EditProposal(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                request.Brief,
+                target,
+                projectPath,
+                summary,
+                steps,
+                ProposalDecision.Pending.ToString());
+        }
     }
 }

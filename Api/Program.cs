@@ -45,6 +45,13 @@ app.MapPost("/api/proposals", async (
             detail: exception.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+    catch (InvalidDataException exception)
+    {
+        return Results.Problem(
+            title: "The local model returned an invalid proposal.",
+            detail: exception.Message,
+            statusCode: StatusCodes.Status502BadGateway);
+    }
     catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
     {
         return Results.Problem(

@@ -128,6 +128,63 @@ public sealed class ApiIntegrationTests
         return proposal.GetProperty("id").GetGuid();
     }
 
+    [Theory]
+    [InlineData("not JSON")]
+    [InlineData("{\"unexpected\":true}")]
+    [InlineData("{\"response\":\"{broken\"}")]
+    [InlineData("{\"response\":\"{\\\"steps\\\":[]}\"}")]
+    public async Task Malformed_model_response_returns_bad_gateway_without_saving_proposal(string modelResponse)
+    {
+        using var factory = new ApiFactory(modelResponseContent: modelResponse);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/proposals", new
+        {
+            brief = "Add a title",
+            projectPath = Path.GetTempPath()
+        });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        var proposals = await client.GetFromJsonAsync<JsonElement[]>("/api/proposals");
+        Assert.NotNull(proposals);
+        Assert.Empty(proposals);
+    }
+
+    [Fact]
+    public async Task Proposal_and_decision_survive_store_reload()
+    {
+        var storePath = Path.Combine(Path.GetTempPath(), $"cawabanga-reload-{Guid.NewGuid():N}.json");
+        try
+        {
+            Guid proposalId;
+            using (var firstFactory = new ApiFactory(storePath: storePath))
+            using (var firstClient = firstFactory.CreateClient())
+            {
+                proposalId = await CreateProposalAsync(firstClient);
+                using var decisionResponse = await firstClient.PostAsJsonAsync(
+                    $"/api/proposals/{proposalId}/decision", new { decision = "approve" });
+                Assert.Equal(HttpStatusCode.OK, decisionResponse.StatusCode);
+            }
+
+            using var secondFactory = new ApiFactory(storePath: storePath);
+            using var secondClient = secondFactory.CreateClient();
+            using var getResponse = await secondClient.GetAsync($"/api/proposals/{proposalId}");
+            var proposal = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+            Assert.Equal(proposalId, proposal.GetProperty("id").GetGuid());
+            Assert.Equal("Approved", proposal.GetProperty("status").GetString());
+            Assert.True(proposal.GetProperty("decidedAtUtc").ValueKind != JsonValueKind.Null);
+        }
+        finally
+        {
+            if (File.Exists(storePath))
+            {
+                File.Delete(storePath);
+            }
+        }
+    }
+
     [Fact]
     public async Task Ollama_unavailable_returns_service_unavailable()
     {
@@ -143,10 +200,14 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
-    private sealed class ApiFactory(HttpStatusCode modelStatusCode = HttpStatusCode.OK) : WebApplicationFactory<global::Program>
+    private sealed class ApiFactory(
+        HttpStatusCode modelStatusCode = HttpStatusCode.OK,
+        string? modelResponseContent = null,
+        string? storePath = null) : WebApplicationFactory<global::Program>
     {
-        private readonly string _storePath = Path.Combine(Path.GetTempPath(), $"cawabanga-tests-{Guid.NewGuid():N}.json");
-        public ModelResponseHandler ModelHandler { get; } = new(modelStatusCode);
+        private readonly string _storePath = storePath ?? Path.Combine(Path.GetTempPath(), $"cawabanga-tests-{Guid.NewGuid():N}.json");
+        private readonly bool _ownsStorePath = storePath is null;
+        public ModelResponseHandler ModelHandler { get; } = new(modelStatusCode, modelResponseContent);
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -164,14 +225,14 @@ public sealed class ApiIntegrationTests
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
-            if (disposing && File.Exists(_storePath))
+            if (disposing && _ownsStorePath && File.Exists(_storePath))
             {
                 File.Delete(_storePath);
             }
         }
     }
 
-    public sealed class ModelResponseHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    public sealed class ModelResponseHandler(HttpStatusCode statusCode, string? responseContent = null) : HttpMessageHandler
     {
         private int _requestCount;
         public int RequestCount => Volatile.Read(ref _requestCount);
@@ -179,9 +240,9 @@ public sealed class ApiIntegrationTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _requestCount);
-            var content = statusCode == HttpStatusCode.OK
+            var content = responseContent ?? (statusCode == HttpStatusCode.OK
                 ? "{\"response\":\"{\\\"summary\\\":\\\"Review a concise edit.\\\",\\\"steps\\\":[\\\"Trim the opening\\\"]}\"}"
-                : "model unavailable";
+                : "model unavailable");
             return Task.FromResult(new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(content)
