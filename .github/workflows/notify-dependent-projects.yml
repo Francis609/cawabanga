@@ -20,7 +20,7 @@ jobs:
           CROSS_REPO_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
       - name: Dispatch update event to configured repositories
         if: ${{ env.CROSS_REPO_TOKEN != '' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9.0.0
         env:
           UPDATE_TARGETS: ${{ vars.UPDATE_TARGETS }}
           CROSS_REPO_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}

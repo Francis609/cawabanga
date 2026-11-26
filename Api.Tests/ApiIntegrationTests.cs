@@ -70,14 +70,62 @@ public sealed class ApiIntegrationTests
     }
 
     [Fact]
-    public async Task Invalid_decision_is_rejected()
+    public async Task Missing_proposal_returns_not_found()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync($"/api/proposals/{Guid.NewGuid()}/decision", new { decision = "maybe" });
+        using var getResponse = await client.GetAsync($"/api/proposals/{Guid.NewGuid()}");
+        using var decisionResponse = await client.PostAsJsonAsync($"/api/proposals/{Guid.NewGuid()}/decision", new { decision = "approve" });
+
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, decisionResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("maybe")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Invalid_decision_is_rejected(string decision)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync($"/api/proposals/{Guid.NewGuid()}/decision", new { decision });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Decided_proposal_cannot_be_changed_to_a_second_decision()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var proposalId = await CreateProposalAsync(client);
+
+        using var approveResponse = await client.PostAsJsonAsync($"/api/proposals/{proposalId}/decision", new { decision = "approve" });
+        var approved = await approveResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var decidedAt = approved.GetProperty("decidedAtUtc").GetDateTimeOffset();
+
+        using var rejectResponse = await client.PostAsJsonAsync($"/api/proposals/{proposalId}/decision", new { decision = "reject" });
+        var stillApproved = await rejectResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, rejectResponse.StatusCode);
+        Assert.Equal("Approved", stillApproved.GetProperty("status").GetString());
+        Assert.Equal(decidedAt, stillApproved.GetProperty("decidedAtUtc").GetDateTimeOffset());
+    }
+
+    private static async Task<Guid> CreateProposalAsync(HttpClient client)
+    {
+        using var response = await client.PostAsJsonAsync("/api/proposals", new
+        {
+            brief = "Trim the opening",
+            projectPath = Path.GetTempPath()
+        });
+        response.EnsureSuccessStatusCode();
+        var proposal = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return proposal.GetProperty("id").GetGuid();
     }
 
     [Fact]
