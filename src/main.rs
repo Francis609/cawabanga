@@ -155,7 +155,7 @@ async fn integrations(State(state): State<AppState>) -> Json<Value> {
 
 async fn list_proposals(State(state): State<AppState>) -> Json<Vec<EditProposal>> {
     let mut proposals = state.store.proposals.lock().await.clone();
-    proposals.sort_by(|a, b| b.created_at_utc.cmp(&a.created_at_utc));
+    proposals.sort_by_key(|proposal| std::cmp::Reverse(proposal.created_at_utc));
     Json(proposals)
 }
 
