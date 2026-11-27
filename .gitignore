@@ -1,4 +1,8 @@
-# .NET build output
+# Rust build output
+/target/
+**/target/
+
+# Legacy .NET build output during migration
 **/bin/
 **/obj/
 

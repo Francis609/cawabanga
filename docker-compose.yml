@@ -1,0 +1,26 @@
+services:
+  cawabanga-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cawabanga-api:local
+    restart: unless-stopped
+    environment:
+      CAWABANGA_BIND: 0.0.0.0:5207
+      CAWABANGA_PROPOSAL_STORE: /data/proposals.json
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen2.5:7b
+      RESOLVE_EXECUTABLE_PATH: ${RESOLVE_EXECUTABLE_PATH:-}
+    ports:
+      - "127.0.0.1:5207:5207"
+    volumes:
+      - cawabanga-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  cawabanga-data:
