@@ -1,18 +1,17 @@
 {
   "files.exclude": {
+    "**/target": true,
     "**/bin": true,
-    "**/obj": true,
-    "**/node_modules": true
+    "**/obj": true
   },
   "search.exclude": {
+    "**/target": true,
     "**/bin": true,
-    "**/obj": true,
-    "**/node_modules": true
+    "**/obj": true
   },
   "editor.formatOnSave": true,
-  "[csharp]": {
-    "editor.defaultFormatter": "ms-dotnettools.csharp",
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
     "editor.formatOnSave": true
-  },
-  "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true
+  }
 }

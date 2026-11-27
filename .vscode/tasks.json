@@ -1,57 +1,9 @@
 {
   "version": "2.0.0",
   "tasks": [
-    {
-      "label": "agent: create .NET project",
-      "type": "process",
-      "command": "dotnet",
-      "args": ["new", "${input:dotnetTemplate}", "--name", "${input:projectName}", "--output", "${workspaceFolder}/${input:projectName}"],
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
-    },
-    {
-      "label": "agent: build current solution",
-      "type": "process",
-      "command": "dotnet",
-      "args": ["build", "${input:solutionPath}", "--configuration", "Release"],
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": "$msCompile",
-      "group": "build"
-    },
-    {
-      "label": "agent: test current solution",
-      "type": "process",
-      "command": "dotnet",
-      "args": ["test", "${input:solutionPath}", "--configuration", "Release"],
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": "$msCompile",
-      "group": "test"
-    },
-    {
-      "label": "agent: format and verify current solution",
-      "type": "process",
-      "command": "dotnet",
-      "args": ["format", "${input:solutionPath}", "--verify-no-changes", "--no-restore"],
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": "$msCompile"
-    }
-  ],
-  "inputs": [
-    {
-      "id": "dotnetTemplate",
-      "type": "promptString",
-      "description": "Approved dotnet new template, such as webapi, console, classlib, or xunit"
-    },
-    {
-      "id": "projectName",
-      "type": "promptString",
-      "description": "New project folder/name under cawabanga"
-    },
-    {
-      "id": "solutionPath",
-      "type": "promptString",
-      "description": "Solution or project path relative to cawabanga",
-      "default": "Api/CawaBanga.Api.csproj"
-    }
+    { "label": "cargo: build", "type": "process", "command": "cargo", "args": ["build", "--release"], "group": "build", "problemMatcher": [] },
+    { "label": "cargo: test", "type": "process", "command": "cargo", "args": ["test"], "group": "test", "problemMatcher": [] },
+    { "label": "cargo: run API", "type": "process", "command": "cargo", "args": ["run", "--release"], "problemMatcher": [] },
+    { "label": "docker: compose up", "type": "process", "command": "docker", "args": ["compose", "up", "--pull", "always", "--build"], "problemMatcher": [] }
   ]
 }
